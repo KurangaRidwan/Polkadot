@@ -4,7 +4,7 @@
 #[ink::contract]
 mod todo {
     use ink::storage::Mapping;
-    use ink::prelude::string::String;  
+    use ink::prelude::string::String;
 
     #[derive(scale::Encode, scale::Decode, Clone, Debug, PartialEq, Eq)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout))]
@@ -18,6 +18,35 @@ mod todo {
     pub struct Todo {
         todos: Mapping<u32, TodoItem>,
         next_id: u32,
+    }
+
+    /// Events
+    #[ink(event)]
+    pub struct TodoCreated {
+        #[ink(topic)]
+        id: u32,
+        description: String,
+    }
+
+    #[ink(event)]
+    pub struct TodoStatusUpdated {
+        #[ink(topic)]
+        id: u32,
+        #[ink(topic)]
+        done: bool,
+    }
+
+    #[ink(event)]
+    pub struct TodoDescriptionUpdated {
+        #[ink(topic)]
+        id: u32,
+        description: String,
+    }
+
+    #[ink(event)]
+    pub struct TodoDeleted {
+        #[ink(topic)]
+        id: u32,
     }
 
     /// Add a Default impl to silence clippy
@@ -43,13 +72,13 @@ mod todo {
             let id = self.next_id;
             let item = TodoItem {
                 id,
-                description,
+                description: description.clone(),
                 done: false,
             };
             self.todos.insert(id, &item);
-
-            // Safe increment to avoid overflow warning
             self.next_id = self.next_id.saturating_add(1);
+
+            self.env().emit_event(TodoCreated { id, description });
 
             id
         }
@@ -64,6 +93,9 @@ mod todo {
             if let Some(mut item) = self.todos.get(id) {
                 item.done = done;
                 self.todos.insert(id, &item);
+
+                self.env().emit_event(TodoStatusUpdated { id, done });
+
                 true
             } else {
                 false
@@ -73,8 +105,11 @@ mod todo {
         #[ink(message)]
         pub fn update_description(&mut self, id: u32, description: String) -> bool {
             if let Some(mut item) = self.todos.get(id) {
-                item.description = description;
+                item.description = description.clone();
                 self.todos.insert(id, &item);
+
+                self.env().emit_event(TodoDescriptionUpdated { id, description });
+
                 true
             } else {
                 false
@@ -85,6 +120,9 @@ mod todo {
         pub fn delete(&mut self, id: u32) -> bool {
             if self.todos.contains(id) {
                 self.todos.remove(id);
+
+                self.env().emit_event(TodoDeleted { id });
+
                 true
             } else {
                 false
